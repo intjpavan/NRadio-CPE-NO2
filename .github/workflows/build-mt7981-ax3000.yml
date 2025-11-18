@@ -45,7 +45,7 @@ jobs:
       - name: Prepare .config
         run: |
           # Option A: if you put it in configs/mt7981-ax3000.config
-          cp defconfigs/mt7981-ax3000.config .config
+          cp defconfig/mt7981-ax3000.config .config
 
           # If you put it at repo root instead, use:
           # cp mt7981-ax3000.config .config
