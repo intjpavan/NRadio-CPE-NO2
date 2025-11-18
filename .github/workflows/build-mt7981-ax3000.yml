@@ -15,6 +15,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Fix or remove broken submodule entries
+        run: |
+          # If .gitmodules contains entries without a url, remove them to avoid fatal submodule errors
+          if [ -f .gitmodules ]; then
+            python3 - <<'PY'
+import configparser,os,subprocess
+cfg=configparser.RawConfigParser()
+cfg.read('.gitmodules')
+for sec in list(cfg.sections()):
+    try:
+        url=cfg.get(sec,'url')
+    except Exception:
+        try:
+            path=cfg.get(sec,'path')
+        except Exception:
+            name=sec.split('"')[-2] if '"' in sec else sec
+            path=name
+        if path and os.path.exists(path):
+            subprocess.run(['git','rm','-f','--cached',path],check=False)
+            subprocess.run(['rm','-rf',path],check=False)
+        subprocess.run(['git','config','-f','.gitmodules','--remove-section',sec],check=False)
+PY
+          fi
 
       - name: Install build dependencies
         run: |
