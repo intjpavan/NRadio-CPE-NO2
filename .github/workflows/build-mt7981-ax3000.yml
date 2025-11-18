@@ -1,96 +1,81 @@
 name: Build MT7981 AX3000
-
-on:
-  workflow_dispatch:
+'on':
+  workflow_dispatch: null
   push:
     branches:
       - main
       - master
-  pull_request:
-
+  pull_request: null
 jobs:
   build:
     runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 0
-
-      - name: Fix or remove broken submodule entries
-        run: |
-          # If .gitmodules contains entries without a url, remove them to avoid fatal submodule errors
-          if [ -f .gitmodules ]; then
-            python3 - <<'PY'
-import configparser,os,subprocess
-cfg=configparser.RawConfigParser()
-cfg.read('.gitmodules')
-for sec in list(cfg.sections()):
-    try:
-        url=cfg.get(sec,'url')
-    except Exception:
-        try:
-            path=cfg.get(sec,'path')
-        except Exception:
-            name=sec.split('"')[-2] if '"' in sec else sec
-            path=name
-        if path and os.path.exists(path):
-            subprocess.run(['git','rm','-f','--cached',path],check=False)
-            subprocess.run(['rm','-rf',path],check=False)
-        subprocess.run(['git','config','-f','.gitmodules','--remove-section',sec],check=False)
-PY
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+    with:
+      submodules: true
+      fetch-depth: 0
+  - name: Fix or remove broken submodule entries
+    run: |
+      # Remove submodule entries that lack a URL to avoid fatal submodule errors
+      if [ -f .gitmodules ]; then
+        git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read key path; do
+          name=$(echo "$key" | sed -E 's/^submodule\.(.*)\.path$/\1/')
+          url=$(git config -f .gitmodules --get "submodule.$name.url" || true)
+          if [ -z "$url" ]; then
+            p=$(git config -f .gitmodules --get "submodule.$name.path" || true)
+            if [ -n "$p" ] && [ -d "$p" ]; then
+              git rm -f --cached "$p" || true
+              rm -rf "$p" || true
+            fi
+            git config -f .gitmodules --remove-section "submodule.$name" || true
           fi
+        done
+      fi
+  - name: Install build dependencies
+    run: |
+      sudo apt-get update
+      sudo apt-get install -y \
+        build-essential \
+        clang \
+        flex \
+        bison \
+        g++ \
+        gcc \
+        gawk \
+        gettext \
+        git \
+        libncurses5-dev \
+        libssl-dev \
+        python3 \
+        python3-pip \
+        rsync \
+        subversion \
+        swig \
+        unzip \
+        wget \
+        zlib1g-dev \
+        xsltproc \
+        file
+  - name: Prepare .config
+    run: |
+      # Option A: if you put it in configs/mt7981-ax3000.config
+      cp defconfig/mt7981-ax3000.config .config
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            clang \
-            flex \
-            bison \
-            g++ \
-            gcc \
-            gawk \
-            gettext \
-            git \
-            libncurses5-dev \
-            libssl-dev \
-            python3 \
-            python3-pip \
-            rsync \
-            subversion \
-            swig \
-            unzip \
-            wget \
-            zlib1g-dev \
-            xsltproc \
-            file
+      # If you put it at repo root instead, use:
+      # cp mt7981-ax3000.config .config
 
-      - name: Prepare .config
-        run: |
-          # Option A: if you put it in configs/mt7981-ax3000.config
-          cp defconfig/mt7981-ax3000.config .config
-
-          # If you put it at repo root instead, use:
-          # cp mt7981-ax3000.config .config
-
-          make defconfig
-
-      - name: Download feeds
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Build firmware
-        run: |
-          make -j$(nproc) V=s
-
-      - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-mt7981-ax3000
-          path: |
-            bin/targets/**/*
+      make defconfig
+  - name: Download feeds
+    run: |
+      ./scripts/feeds update -a
+      ./scripts/feeds install -a
+  - name: Build firmware
+    run: |
+      make -j$(nproc) V=s
+  - name: Upload firmware artifacts
+    uses: actions/upload-artifact@v4
+    with:
+      name: firmware-mt7981-ax3000
+      path: |
+        bin/targets/**/*
