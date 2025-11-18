@@ -1,4 +1,5 @@
 name: Build MT7981 AX3000
+
 on:
   workflow_dispatch:
   push:
@@ -9,31 +10,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 0
-
-      - name: Fix or remove broken submodule entries
-        run: |
-          # Remove submodule entries that lack a URL to avoid fatal submodule errors
-          if [ -f .gitmodules ]; then
-            git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read key path; do
-              name=$(echo "$key" | sed -E 's/^submodule\.(.*)\.path$/\1/')
-              url=$(git config -f .gitmodules --get "submodule.$name.url" || true)
-              if [ -z "$url" ]; then
-                p=$(git config -f .gitmodules --get "submodule.$name.path" || true)
-                if [ -n "$p" ] && [ -d "$p" ]; then
-                  git rm -f --cached "$p" || true
-                  rm -rf "$p" || true
-                fi
-                git config -f .gitmodules --remove-section "submodule.$name" || true
-              fi
-            done
-          fi
 
       - name: Install build dependencies
         run: |
@@ -52,6 +33,7 @@ jobs:
             libssl-dev \
             python3 \
             python3-pip \
+            python3-docutils \
             rsync \
             subversion \
             swig \
@@ -63,7 +45,12 @@ jobs:
 
       - name: Prepare .config
         run: |
+          # Option A: if you put it in configs/mt7981-ax3000.config
           cp defconfig/mt7981-ax3000.config .config
+
+          # If you put it at repo root instead, use:
+          # cp mt7981-ax3000.config .config
+
           make defconfig
 
       - name: Download feeds
